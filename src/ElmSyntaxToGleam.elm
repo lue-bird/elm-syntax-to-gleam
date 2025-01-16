@@ -9,7 +9,7 @@ declarations to gleam.
 @docs modules, gleamDeclarationsToModuleString
 @docs GleamLetDeclaration, GleamExpression, GleamPattern, GleamType
 
-If you need more fine-gleamed helpers,
+If you need more fine-grained helpers,
 [open an issue](https://github.com/lue-bird/elm-syntax-format/issues/new)
 
 -}
