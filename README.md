@@ -51,7 +51,7 @@ run [this node script](https://github.com/lue-bird/elm-syntax-to-gleam/tree/main
 -   not much care has been put into making the resulting code readable or even conventionally formatted
     and comments are not preserved
 
-Please [report any issues](https://github.com/lue-bird/elm-syntax-format/issues/new) you notice <3
+Please [report any issues](https://github.com/lue-bird/elm-syntax-to-gleam/issues/new) you notice <3
 
 ### why gleam?
 -   it's pretty much a superset of elm which makes transpiling easy
