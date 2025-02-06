@@ -1,5 +1,6 @@
-> Status: gleam seems to hate record access as much as any other languages not called elm.
-Investigating why editor tooling again knows the type better than the compiler.
+> Status: gleam does not seem to support record access type inference as good as elm.
+Editor tooling knows the type better than the compiler.
+> Also investigating why lazy module-level values are sometimes not used with ().
 
 Print pure [`elm-syntax`](https://dark.elm.dmy.fr/packages/stil4m/elm-syntax/latest/) declarations as
 [gleam](https://gleam.run/) code.

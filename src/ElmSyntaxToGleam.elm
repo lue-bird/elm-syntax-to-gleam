@@ -158,10 +158,12 @@ Contains variants, variant function and value declaration names.
 
 -}
 type alias ModuleContext =
-    { valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup :
+    { valueAndFunctionAndTypeAliasAndEnumTypes :
         FastDict.Dict
             ( Elm.Syntax.ModuleName.ModuleName, String )
-            Elm.Syntax.ModuleName.ModuleName
+            { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
+            , isLazy : Bool
+            }
     , variantLookup :
         FastDict.Dict
             ( Elm.Syntax.ModuleName.ModuleName, String )
@@ -186,7 +188,18 @@ importsToModuleContext :
             FastDict.Dict String (FastDict.Dict String { valueCount : Int })
         }
     -> List (Elm.Syntax.Node.Node Elm.Syntax.Import.Import)
-    -> ModuleContext
+    ->
+        { valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup :
+            FastDict.Dict
+                ( Elm.Syntax.ModuleName.ModuleName, String )
+                Elm.Syntax.ModuleName.ModuleName
+        , variantLookup :
+            FastDict.Dict
+                ( Elm.Syntax.ModuleName.ModuleName, String )
+                { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
+                , valueCount : Int
+                }
+        }
 importsToModuleContext moduleExposes imports =
     let
         importsNormal :
@@ -306,8 +319,7 @@ importsToModuleContext moduleExposes imports =
                                             )
                                 , exposedValuesAndFunctionsAndTypeAliasesAndEnumTypes =
                                     exposes.valuesAndFunctionsAndTypeAliasesAndEnumTypes
-                                , exposedVariants =
-                                    exposes.variants
+                                , exposedVariants = exposes.variants
                                 }
                             )
                    )
@@ -318,20 +330,20 @@ importsToModuleContext moduleExposes imports =
             (\syntaxImport soFar ->
                 let
                     importedModuleMembers :
-                        { valuesAndFunctionsAndTypeAliasesAndEnumTypes :
+                        { valueAndFunctionAndTypeAliasAndEnumTypes :
                             FastSet.Set String
                         , variants : FastDict.Dict String { valueCount : Int }
                         }
                     importedModuleMembers =
                         case moduleExposes |> FastDict.get syntaxImport.moduleName of
                             Nothing ->
-                                { valuesAndFunctionsAndTypeAliasesAndEnumTypes =
+                                { valueAndFunctionAndTypeAliasAndEnumTypes =
                                     FastSet.empty
                                 , variants = FastDict.empty
                                 }
 
                             Just moduleExposedNames ->
-                                { valuesAndFunctionsAndTypeAliasesAndEnumTypes =
+                                { valueAndFunctionAndTypeAliasAndEnumTypes =
                                     moduleExposedNames.enumTypesExposingVariants
                                         |> FastDict.foldl
                                             (\enumTypeName _ namesSoFar ->
@@ -348,8 +360,8 @@ importsToModuleContext moduleExposes imports =
                                             FastDict.empty
                                 }
                 in
-                moduleContextMerge
-                    (moduleContextMerge
+                moduleImportsContextMerge
+                    (moduleImportsContextMerge
                         { variantLookup =
                             syntaxImport.exposedVariants
                                 |> FastDict.foldl
@@ -374,7 +386,7 @@ importsToModuleContext moduleExposes imports =
                         (case syntaxImport.alias of
                             Nothing ->
                                 { valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup =
-                                    importedModuleMembers.valuesAndFunctionsAndTypeAliasesAndEnumTypes
+                                    importedModuleMembers.valueAndFunctionAndTypeAliasAndEnumTypes
                                         |> FastSet.foldl
                                             (\exposeFromImportedModule dictSoFar ->
                                                 dictSoFar
@@ -399,7 +411,7 @@ importsToModuleContext moduleExposes imports =
 
                             Just importAlias ->
                                 { valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup =
-                                    importedModuleMembers.valuesAndFunctionsAndTypeAliasesAndEnumTypes
+                                    importedModuleMembers.valueAndFunctionAndTypeAliasAndEnumTypes
                                         |> FastSet.foldl
                                             (\exposeFromImportedModule dictSoFar ->
                                                 dictSoFar
@@ -427,17 +439,64 @@ importsToModuleContext moduleExposes imports =
             )
             { valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup =
                 FastDict.empty
-            , variantLookup =
-                FastDict.empty
+            , variantLookup = FastDict.empty
             }
 
 
-moduleContextMerge : ModuleContext -> ModuleContext -> ModuleContext
-moduleContextMerge a b =
+moduleImportsContextMerge :
+    { valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup :
+        FastDict.Dict
+            ( Elm.Syntax.ModuleName.ModuleName, String )
+            Elm.Syntax.ModuleName.ModuleName
+    , variantLookup :
+        FastDict.Dict
+            ( Elm.Syntax.ModuleName.ModuleName, String )
+            { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
+            , valueCount : Int
+            }
+    }
+    ->
+        { valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup :
+            FastDict.Dict
+                ( Elm.Syntax.ModuleName.ModuleName, String )
+                Elm.Syntax.ModuleName.ModuleName
+        , variantLookup :
+            FastDict.Dict
+                ( Elm.Syntax.ModuleName.ModuleName, String )
+                { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
+                , valueCount : Int
+                }
+        }
+    ->
+        { valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup :
+            FastDict.Dict
+                ( Elm.Syntax.ModuleName.ModuleName, String )
+                Elm.Syntax.ModuleName.ModuleName
+        , variantLookup :
+            FastDict.Dict
+                ( Elm.Syntax.ModuleName.ModuleName, String )
+                { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
+                , valueCount : Int
+                }
+        }
+moduleImportsContextMerge a b =
     { valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup =
         FastDict.union
             a.valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup
             b.valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup
+    , variantLookup =
+        FastDict.union
+            a.variantLookup
+            b.variantLookup
+    }
+
+
+moduleContextMerge : ModuleContext -> ModuleContext -> ModuleContext
+moduleContextMerge a b =
+    { valueAndFunctionAndTypeAliasAndEnumTypes =
+        FastDict.union
+            a.valueAndFunctionAndTypeAliasAndEnumTypes
+            b.valueAndFunctionAndTypeAliasAndEnumTypes
     , variantLookup =
         FastDict.union
             a.variantLookup
@@ -1006,7 +1065,7 @@ type_ moduleOriginLookup (Elm.Syntax.Node.Node _ syntaxType) =
                 ( qualification, name ) =
                     reference
             in
-            case moduleOriginLookup.valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup |> FastDict.get reference of
+            case moduleOriginLookup.valueAndFunctionAndTypeAliasAndEnumTypes |> FastDict.get reference of
                 Nothing ->
                     Err
                         ("could not find module origin of the type reference "
@@ -1016,14 +1075,14 @@ type_ moduleOriginLookup (Elm.Syntax.Node.Node _ syntaxType) =
                                 }
                         )
 
-                Just moduleOrigin ->
+                Just referenceInfo ->
                     Result.map
                         (\arguments ->
                             let
                                 gleamReference : { moduleOrigin : Maybe String, name : String }
                                 gleamReference =
                                     case
-                                        { moduleOrigin = moduleOrigin
+                                        { moduleOrigin = referenceInfo.moduleOrigin
                                         , name = name
                                         }
                                             |> referenceToCoreGleam
@@ -1034,7 +1093,7 @@ type_ moduleOriginLookup (Elm.Syntax.Node.Node _ syntaxType) =
                                         Nothing ->
                                             { moduleOrigin = Nothing
                                             , name =
-                                                { moduleOrigin = moduleOrigin
+                                                { moduleOrigin = referenceInfo.moduleOrigin
                                                 , name = name
                                                 }
                                                     |> uppercaseReferenceToGleamName
@@ -1142,8 +1201,18 @@ type_ moduleOriginLookup (Elm.Syntax.Node.Node _ syntaxType) =
                         )
                 )
 
-        Elm.Syntax.TypeAnnotation.GenericRecord _ _ ->
-            Err "extensible record types are not supported"
+        Elm.Syntax.TypeAnnotation.GenericRecord _ (Elm.Syntax.Node.Node _ fields) ->
+            Err
+                ("extensible record types are not supported: { _ | "
+                    ++ (fields
+                            |> List.map
+                                (\(Elm.Syntax.Node.Node _ ( Elm.Syntax.Node.Node _ name, _ )) ->
+                                    name
+                                )
+                            |> String.join ", "
+                       )
+                    ++ " }"
+                )
 
 
 typeExpandFunctionOutputReverse :
@@ -2698,18 +2767,19 @@ printGleamExpressionRecord syntaxRecordFields =
     Print.exactly (recordName ++ "(")
         |> Print.followedBy
             (Print.withIndentAtNextMultipleOf4
-                (Print.spaceOrLinebreakIndented fullLineSpread
+                (Print.emptyOrLinebreakIndented fullLineSpread
                     |> Print.followedBy
                         (fieldsPrints
                             |> Print.listIntersperseAndFlatten
                                 (Print.exactly ","
-                                    |> Print.followedBy Print.linebreakIndented
+                                    |> Print.followedBy
+                                        (Print.emptyOrLinebreakIndented fullLineSpread)
                                 )
                         )
                 )
             )
         |> Print.followedBy
-            (Print.spaceOrLinebreakIndented fullLineSpread)
+            (Print.emptyOrLinebreakIndented fullLineSpread)
         |> Print.followedBy (Print.exactly ")")
 
 
@@ -3258,6 +3328,46 @@ modules syntaxDeclarationsIncludingOverwrittenOnes =
                     )
                     FastDict.empty
 
+        lazyValues : FastSet.Set ( Elm.Syntax.ModuleName.ModuleName, String )
+        lazyValues =
+            syntaxModules
+                |> List.foldl
+                    (\syntaxModule soFarAcrossModules ->
+                        let
+                            moduleName : Elm.Syntax.ModuleName.ModuleName
+                            moduleName =
+                                syntaxModule.moduleDefinition
+                                    |> Elm.Syntax.Node.value
+                                    |> moduleHeaderName
+                        in
+                        syntaxModule.declarations
+                            |> List.foldl
+                                (\(Elm.Syntax.Node.Node _ syntaxDeclaration) soFarWithinModuleAndAcross ->
+                                    case syntaxDeclaration of
+                                        Elm.Syntax.Declaration.FunctionDeclaration syntaxValueOrFunctionDeclaration ->
+                                            let
+                                                implementation : Elm.Syntax.Expression.FunctionImplementation
+                                                implementation =
+                                                    syntaxValueOrFunctionDeclaration.declaration |> Elm.Syntax.Node.value
+                                            in
+                                            case implementation.arguments of
+                                                _ :: _ ->
+                                                    soFarWithinModuleAndAcross
+
+                                                [] ->
+                                                    soFarWithinModuleAndAcross
+                                                        |> FastSet.insert
+                                                            ( moduleName
+                                                            , implementation.name |> Elm.Syntax.Node.value
+                                                            )
+
+                                        _ ->
+                                            soFarWithinModuleAndAcross
+                                )
+                                soFarAcrossModules
+                    )
+                    FastSet.empty
+
         gleamDeclarationsWithoutExtraRecordTypeAliases :
             { errors : List String
             , declarations :
@@ -3293,19 +3403,44 @@ modules syntaxDeclarationsIncludingOverwrittenOnes =
                                     |> Elm.Syntax.Node.value
                                     |> moduleHeaderName
 
+                            importContext :
+                                { valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup :
+                                    FastDict.Dict
+                                        ( Elm.Syntax.ModuleName.ModuleName, String )
+                                        Elm.Syntax.ModuleName.ModuleName
+                                , variantLookup :
+                                    FastDict.Dict
+                                        ( Elm.Syntax.ModuleName.ModuleName, String )
+                                        { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
+                                        , valueCount : Int
+                                        }
+                                }
+                            importContext =
+                                syntaxModule.imports
+                                    |> importsToModuleContext moduleMembers
+
                             createdModuleContext : ModuleContext
                             createdModuleContext =
                                 moduleContextMerge
-                                    (syntaxModule.imports |> importsToModuleContext moduleMembers)
+                                    { valueAndFunctionAndTypeAliasAndEnumTypes =
+                                        importContext.valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup
+                                            |> FastDict.map
+                                                (\reference moduleOrigin ->
+                                                    { moduleOrigin = moduleOrigin
+                                                    , isLazy = lazyValues |> FastSet.member reference
+                                                    }
+                                                )
+                                    , variantLookup = importContext.variantLookup
+                                    }
                                     (case moduleMembers |> FastDict.get moduleName of
                                         Nothing ->
-                                            { valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup =
+                                            { valueAndFunctionAndTypeAliasAndEnumTypes =
                                                 FastDict.empty
                                             , variantLookup = FastDict.empty
                                             }
 
                                         Just moduleLocalNames ->
-                                            { valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup =
+                                            { valueAndFunctionAndTypeAliasAndEnumTypes =
                                                 FastSet.union
                                                     moduleLocalNames.valueOrFunctionOrTypeAliasNames
                                                     (moduleLocalNames.enumTypesExposingVariants
@@ -3319,7 +3454,10 @@ modules syntaxDeclarationsIncludingOverwrittenOnes =
                                                         (\name soFar ->
                                                             soFar
                                                                 |> FastDict.insert ( [], name )
-                                                                    moduleName
+                                                                    { moduleOrigin = moduleName
+                                                                    , isLazy =
+                                                                        lazyValues |> FastSet.member ( moduleName, name )
+                                                                    }
                                                         )
                                                         FastDict.empty
                                             , variantLookup =
@@ -3773,10 +3911,9 @@ valueOrFunctionDeclaration context syntaxDeclarationValueOrFunction =
                 )
                 (implementation.expression
                     |> expression
-                        { valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup =
-                            context.valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup
-                        , variantLookup =
-                            context.variantLookup
+                        { valueAndFunctionAndTypeAliasAndEnumTypes =
+                            context.valueAndFunctionAndTypeAliasAndEnumTypes
+                        , variantLookup = context.variantLookup
                         , variablesFromWithinDeclarationInScope =
                             parameters
                                 |> listMapToFastSetsAndUnify .introducedVariables
@@ -3788,8 +3925,8 @@ valueOrFunctionDeclaration context syntaxDeclarationValueOrFunction =
                 (\p ->
                     p
                         |> pattern
-                            { valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup =
-                                context.valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup
+                            { valueAndFunctionAndTypeAliasAndEnumTypes =
+                                context.valueAndFunctionAndTypeAliasAndEnumTypes
                             , variantLookup = context.variantLookup
                             }
                 )
@@ -3802,8 +3939,8 @@ valueOrFunctionDeclaration context syntaxDeclarationValueOrFunction =
                 Result.map Just
                     (signature.typeAnnotation
                         |> type_
-                            { valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup =
-                                context.valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup
+                            { valueAndFunctionAndTypeAliasAndEnumTypes =
+                                context.valueAndFunctionAndTypeAliasAndEnumTypes
                             , variantLookup = context.variantLookup
                             }
                     )
@@ -3932,10 +4069,12 @@ gleamReservedWords =
 expressionContextAddVariablesInScope :
     FastSet.Set String
     ->
-        { valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup :
+        { valueAndFunctionAndTypeAliasAndEnumTypes :
             FastDict.Dict
                 ( Elm.Syntax.ModuleName.ModuleName, String )
-                Elm.Syntax.ModuleName.ModuleName
+                { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
+                , isLazy : Bool
+                }
         , variantLookup :
             FastDict.Dict
                 ( Elm.Syntax.ModuleName.ModuleName, String )
@@ -3945,10 +4084,12 @@ expressionContextAddVariablesInScope :
         , variablesFromWithinDeclarationInScope : FastSet.Set String
         }
     ->
-        { valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup :
+        { valueAndFunctionAndTypeAliasAndEnumTypes :
             FastDict.Dict
                 ( Elm.Syntax.ModuleName.ModuleName, String )
-                Elm.Syntax.ModuleName.ModuleName
+                { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
+                , isLazy : Bool
+                }
         , variantLookup :
             FastDict.Dict
                 ( Elm.Syntax.ModuleName.ModuleName, String )
@@ -3958,8 +4099,8 @@ expressionContextAddVariablesInScope :
         , variablesFromWithinDeclarationInScope : FastSet.Set String
         }
 expressionContextAddVariablesInScope additionalVariablesInScope context =
-    { valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup =
-        context.valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup
+    { valueAndFunctionAndTypeAliasAndEnumTypes =
+        context.valueAndFunctionAndTypeAliasAndEnumTypes
     , variantLookup =
         context.variantLookup
     , variablesFromWithinDeclarationInScope =
@@ -3970,10 +4111,12 @@ expressionContextAddVariablesInScope additionalVariablesInScope context =
 
 
 expression :
-    { valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup :
+    { valueAndFunctionAndTypeAliasAndEnumTypes :
         FastDict.Dict
             ( Elm.Syntax.ModuleName.ModuleName, String )
-            Elm.Syntax.ModuleName.ModuleName
+            { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
+            , isLazy : Bool
+            }
     , variantLookup :
         FastDict.Dict
             ( Elm.Syntax.ModuleName.ModuleName, String )
@@ -4240,10 +4383,10 @@ expression context (Elm.Syntax.Node.Node _ syntaxExpression) =
 
                         -- not a variant
                         Nothing ->
-                            case context.valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup |> FastDict.get ( qualification, name ) of
-                                Just moduleOrigin ->
+                            case context.valueAndFunctionAndTypeAliasAndEnumTypes |> FastDict.get ( qualification, name ) of
+                                Just referenceInfo ->
                                     Ok
-                                        (case { moduleOrigin = moduleOrigin, name = name } |> referenceToCoreGleam of
+                                        (case { moduleOrigin = referenceInfo.moduleOrigin, name = name } |> referenceToCoreGleam of
                                             Just gleamReference ->
                                                 GleamExpressionReference gleamReference
 
@@ -4254,17 +4397,27 @@ expression context (Elm.Syntax.Node.Node _ syntaxExpression) =
                                                         { moduleOrigin = Nothing
                                                         , name =
                                                             uppercaseReferenceToGleamName
-                                                                { moduleOrigin = moduleOrigin
+                                                                { moduleOrigin = referenceInfo.moduleOrigin
+                                                                , name = name
+                                                                }
+                                                        }
+
+                                                else if referenceInfo.isLazy then
+                                                    GleamExpressionReferenceModuleLevelValueAsLazyFn
+                                                        { moduleOrigin = Nothing
+                                                        , name =
+                                                            lowercaseReferenceToGleamName
+                                                                { moduleOrigin = referenceInfo.moduleOrigin
                                                                 , name = name
                                                                 }
                                                         }
 
                                                 else
-                                                    GleamExpressionReferenceModuleLevelValueAsLazyFn
+                                                    GleamExpressionReference
                                                         { moduleOrigin = Nothing
                                                         , name =
                                                             lowercaseReferenceToGleamName
-                                                                { moduleOrigin = moduleOrigin
+                                                                { moduleOrigin = referenceInfo.moduleOrigin
                                                                 , name = name
                                                                 }
                                                         }
@@ -4504,8 +4657,8 @@ expression context (Elm.Syntax.Node.Node _ syntaxExpression) =
                         )
                         (parameter0Node
                             |> pattern
-                                { valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup =
-                                    context.valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup
+                                { valueAndFunctionAndTypeAliasAndEnumTypes =
+                                    context.valueAndFunctionAndTypeAliasAndEnumTypes
                                 , variantLookup = context.variantLookup
                                 }
                         )
@@ -4514,8 +4667,8 @@ expression context (Elm.Syntax.Node.Node _ syntaxExpression) =
                                 (\parameter ->
                                     parameter
                                         |> pattern
-                                            { valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup =
-                                                context.valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup
+                                            { valueAndFunctionAndTypeAliasAndEnumTypes =
+                                                context.valueAndFunctionAndTypeAliasAndEnumTypes
                                             , variantLookup = context.variantLookup
                                             }
                                 )
@@ -4868,10 +5021,12 @@ gleamExpressionIsDefinitelyOfTypeString gleamExpression =
 
 
 case_ :
-    { valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup :
+    { valueAndFunctionAndTypeAliasAndEnumTypes :
         FastDict.Dict
             ( Elm.Syntax.ModuleName.ModuleName, String )
-            Elm.Syntax.ModuleName.ModuleName
+            { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
+            , isLazy : Bool
+            }
     , variantLookup :
         FastDict.Dict
             ( Elm.Syntax.ModuleName.ModuleName, String )
@@ -4907,18 +5062,20 @@ case_ context ( patternNode, resultNode ) =
         )
         (patternNode
             |> pattern
-                { valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup =
-                    context.valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup
+                { valueAndFunctionAndTypeAliasAndEnumTypes =
+                    context.valueAndFunctionAndTypeAliasAndEnumTypes
                 , variantLookup = context.variantLookup
                 }
         )
 
 
 letDeclaration :
-    { valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup :
+    { valueAndFunctionAndTypeAliasAndEnumTypes :
         FastDict.Dict
             ( Elm.Syntax.ModuleName.ModuleName, String )
-            Elm.Syntax.ModuleName.ModuleName
+            { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
+            , isLazy : Bool
+            }
     , variantLookup :
         FastDict.Dict
             ( Elm.Syntax.ModuleName.ModuleName, String )
@@ -4950,8 +5107,8 @@ letDeclaration context (Elm.Syntax.Node.Node _ syntaxLetDeclaration) =
                 )
                 (destructuringPatternNode
                     |> pattern
-                        { valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup =
-                            context.valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup
+                        { valueAndFunctionAndTypeAliasAndEnumTypes =
+                            context.valueAndFunctionAndTypeAliasAndEnumTypes
                         , variantLookup = context.variantLookup
                         }
                 )
@@ -4972,10 +5129,12 @@ letDeclaration context (Elm.Syntax.Node.Node _ syntaxLetDeclaration) =
 
 
 letValueOrFunctionDeclaration :
-    { valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup :
+    { valueAndFunctionAndTypeAliasAndEnumTypes :
         FastDict.Dict
             ( Elm.Syntax.ModuleName.ModuleName, String )
-            Elm.Syntax.ModuleName.ModuleName
+            { moduleOrigin : Elm.Syntax.ModuleName.ModuleName
+            , isLazy : Bool
+            }
     , variantLookup :
         FastDict.Dict
             ( Elm.Syntax.ModuleName.ModuleName, String )
@@ -5082,8 +5241,8 @@ letValueOrFunctionDeclaration context syntaxDeclarationValueOrFunction =
                 )
                 (implementation.expression
                     |> expression
-                        { valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup =
-                            context.valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup
+                        { valueAndFunctionAndTypeAliasAndEnumTypes =
+                            context.valueAndFunctionAndTypeAliasAndEnumTypes
                         , variantLookup =
                             context.variantLookup
                         , variablesFromWithinDeclarationInScope =
@@ -5100,8 +5259,8 @@ letValueOrFunctionDeclaration context syntaxDeclarationValueOrFunction =
                 (\p ->
                     p
                         |> pattern
-                            { valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup =
-                                context.valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup
+                            { valueAndFunctionAndTypeAliasAndEnumTypes =
+                                context.valueAndFunctionAndTypeAliasAndEnumTypes
                             , variantLookup = context.variantLookup
                             }
                 )
@@ -5114,8 +5273,8 @@ letValueOrFunctionDeclaration context syntaxDeclarationValueOrFunction =
                 Result.map Just
                     (signature.typeAnnotation
                         |> type_
-                            { valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup =
-                                context.valueAndFunctionAndTypeAliasAndEnumTypeModuleOriginLookup
+                            { valueAndFunctionAndTypeAliasAndEnumTypes =
+                                context.valueAndFunctionAndTypeAliasAndEnumTypes
                             , variantLookup = context.variantLookup
                             }
                     )
@@ -5952,56 +6111,155 @@ gleamDeclarationsToModuleString gleamDeclarations =
         ++ ((valueAndFunctionDeclarationsOrdered
                 |> Print.listMapAndIntersperseAndFlatten
                     (\gleamValueOrFunctionDeclaration ->
-                        Print.exactly "pub fn "
-                            |> Print.followedBy
-                                (Print.exactly (gleamValueOrFunctionDeclaration.name ++ "()")
+                        case gleamValueOrFunctionDeclaration.parameters of
+                            [] ->
+                                Print.exactly "pub fn "
                                     |> Print.followedBy
-                                        (Print.withIndentAtNextMultipleOf4
-                                            ((case gleamValueOrFunctionDeclaration.type_ of
-                                                Nothing ->
-                                                    Print.empty
+                                        (Print.exactly (gleamValueOrFunctionDeclaration.name ++ "()")
+                                            |> Print.followedBy
+                                                (Print.withIndentAtNextMultipleOf4
+                                                    ((case gleamValueOrFunctionDeclaration.type_ of
+                                                        Nothing ->
+                                                            Print.empty
 
-                                                Just declaredType ->
-                                                    let
-                                                        typePrint : Print
-                                                        typePrint =
-                                                            printGleamTypeNotParenthesized declaredType
+                                                        Just declaredType ->
+                                                            let
+                                                                typePrint : Print
+                                                                typePrint =
+                                                                    printGleamTypeNotParenthesized declaredType
 
-                                                        typeLineSpread : Print.LineSpread
-                                                        typeLineSpread =
-                                                            typePrint |> Print.lineSpread
-                                                    in
-                                                    Print.exactly " ->"
-                                                        |> Print.followedBy
-                                                            (Print.spaceOrLinebreakIndented typeLineSpread
+                                                                typeLineSpread : Print.LineSpread
+                                                                typeLineSpread =
+                                                                    typePrint |> Print.lineSpread
+                                                            in
+                                                            Print.exactly " ->"
                                                                 |> Print.followedBy
-                                                                    (Print.withIndentAtNextMultipleOf4
-                                                                        typePrint
+                                                                    (Print.spaceOrLinebreakIndented typeLineSpread
+                                                                        |> Print.followedBy
+                                                                            (Print.withIndentAtNextMultipleOf4
+                                                                                typePrint
+                                                                            )
                                                                     )
-                                                            )
-                                             )
-                                                |> Print.followedBy
-                                                    (Print.exactly " {")
-                                                |> Print.followedBy Print.linebreakIndented
-                                                |> Print.followedBy
-                                                    (printGleamExpressionNotParenthesized
-                                                        (case gleamValueOrFunctionDeclaration.parameters of
-                                                            [] ->
-                                                                gleamValueOrFunctionDeclaration.result
+                                                     )
+                                                        |> Print.followedBy
+                                                            (Print.exactly " {")
+                                                        |> Print.followedBy Print.linebreakIndented
+                                                        |> Print.followedBy
+                                                            (printGleamExpressionNotParenthesized
+                                                                (case gleamValueOrFunctionDeclaration.parameters of
+                                                                    [] ->
+                                                                        gleamValueOrFunctionDeclaration.result
 
-                                                            parameter0 :: parameter1Up ->
-                                                                GleamExpressionLambda
-                                                                    { parameter0 = parameter0
-                                                                    , parameter1Up = parameter1Up
-                                                                    , result = gleamValueOrFunctionDeclaration.result
-                                                                    }
-                                                        )
+                                                                    parameter0 :: parameter1Up ->
+                                                                        GleamExpressionLambda
+                                                                            { parameter0 = parameter0
+                                                                            , parameter1Up = parameter1Up
+                                                                            , result = gleamValueOrFunctionDeclaration.result
+                                                                            }
+                                                                )
+                                                            )
+                                                        |> Print.followedBy Print.linebreak
+                                                        |> Print.followedBy (Print.exactly "}")
                                                     )
-                                                |> Print.followedBy Print.linebreak
-                                                |> Print.followedBy (Print.exactly "}")
-                                            )
+                                                )
                                         )
-                                )
+
+                            parameter0 :: parameter1Up ->
+                                Print.exactly "pub fn "
+                                    |> Print.followedBy
+                                        (Print.exactly gleamValueOrFunctionDeclaration.name
+                                            |> Print.followedBy
+                                                (case gleamValueOrFunctionDeclaration.type_ of
+                                                    Nothing ->
+                                                        Print.exactly "("
+                                                            |> Print.followedBy
+                                                                ((parameter0 :: parameter1Up)
+                                                                    |> Print.listMapAndIntersperseAndFlatten
+                                                                        printGleamExpressionParameter
+                                                                        (Print.exactly ", ")
+                                                                )
+                                                            |> Print.followedBy
+                                                                (Print.exactly ")")
+
+                                                    Just declaredType ->
+                                                        let
+                                                            typedParametersAndResultType :
+                                                                { parameters : List { pattern : Maybe String, type_ : GleamType }
+                                                                , result : GleamType
+                                                                }
+                                                            typedParametersAndResultType =
+                                                                case declaredType of
+                                                                    GleamTypeFunction gleamTypeFunction ->
+                                                                        { parameters =
+                                                                            List.map2
+                                                                                (\parameterType parameterPattern ->
+                                                                                    { pattern = parameterPattern, type_ = parameterType }
+                                                                                )
+                                                                                gleamTypeFunction.input
+                                                                                (parameter0 :: parameter1Up)
+                                                                        , result = gleamTypeFunction.output
+                                                                        }
+
+                                                                    declaredTypeNotFunction ->
+                                                                        -- TODO fail or something
+                                                                        { parameters = []
+                                                                        , result = declaredTypeNotFunction
+                                                                        }
+
+                                                            resultTypePrint : Print
+                                                            resultTypePrint =
+                                                                printGleamTypeNotParenthesized
+                                                                    typedParametersAndResultType.result
+
+                                                            typeLineSpread : Print.LineSpread
+                                                            typeLineSpread =
+                                                                resultTypePrint |> Print.lineSpread
+                                                        in
+                                                        Print.exactly "("
+                                                            |> Print.followedBy
+                                                                (typedParametersAndResultType.parameters
+                                                                    |> Print.listMapAndIntersperseAndFlatten
+                                                                        (\typedParameter ->
+                                                                            typedParameter.pattern
+                                                                                |> printGleamExpressionParameter
+                                                                                |> Print.followedBy
+                                                                                    (Print.exactly " : ")
+                                                                                |> Print.followedBy
+                                                                                    (typedParameter.type_
+                                                                                        |> printGleamTypeNotParenthesized
+                                                                                    )
+                                                                        )
+                                                                        (Print.exactly ", ")
+                                                                )
+                                                            |> Print.followedBy
+                                                                (Print.exactly ")")
+                                                            |> Print.followedBy
+                                                                (Print.withIndentAtNextMultipleOf4
+                                                                    (Print.exactly " ->"
+                                                                        |> Print.followedBy
+                                                                            (Print.spaceOrLinebreakIndented typeLineSpread
+                                                                                |> Print.followedBy
+                                                                                    (Print.withIndentAtNextMultipleOf4
+                                                                                        resultTypePrint
+                                                                                    )
+                                                                            )
+                                                                    )
+                                                                )
+                                                )
+                                            |> Print.followedBy
+                                                (Print.exactly " {")
+                                            |> Print.followedBy
+                                                (Print.withIndentAtNextMultipleOf4
+                                                    (Print.linebreakIndented
+                                                        |> Print.followedBy
+                                                            (printGleamExpressionNotParenthesized
+                                                                gleamValueOrFunctionDeclaration.result
+                                                            )
+                                                    )
+                                                )
+                                            |> Print.followedBy Print.linebreak
+                                            |> Print.followedBy (Print.exactly "}")
+                                        )
                     )
                     (Print.linebreak
                         |> Print.followedBy Print.linebreak
@@ -6011,6 +6269,16 @@ gleamDeclarationsToModuleString gleamDeclarations =
            )
         ++ """
 """
+
+
+printGleamExpressionParameter : Maybe String -> Print
+printGleamExpressionParameter maybeParameter =
+    case maybeParameter of
+        Nothing ->
+            Print.exactly "_"
+
+        Just parameter ->
+            Print.exactly parameter
 
 
 defaultDeclarations : String
@@ -6076,12 +6344,10 @@ fn basics_remainder_by(divisor: Float, to_divide: Float) -> Float {
   }
 }
 
-fn basics_idiv() -> fn(Float, Float) -> Float {
-  fn(to_divide, divisor) {
-    case float.divide(to_divide, by: divisor) {
-      Error(_) -> 0.0
-      Ok(division_result) -> int.to_float(float.truncate(division_result))
-    }
+fn basics_idiv(to_divide: Float, divisor: Float) -> Float {
+  case float.divide(to_divide, by: divisor) {
+    Error(_) -> 0.0
+    Ok(division_result) -> int.to_float(float.truncate(division_result))
   }
 }
 
