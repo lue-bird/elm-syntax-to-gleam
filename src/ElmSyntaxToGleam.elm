@@ -33,7 +33,7 @@ import Print exposing (Print)
 import Unicode
 
 
-{-| The sub-set of F# type syntax used in generated code
+{-| The sub-set of gleam type syntax used in generated code
 -}
 type GleamType
     = GleamTypeConstruct
@@ -53,7 +53,7 @@ type GleamType
         }
 
 
-{-| The sub-set of F# pattern syntax used in generated code
+{-| The sub-set of gleam pattern syntax used in generated code
 -}
 type GleamPattern
     = GleamPatternIgnore
@@ -83,7 +83,7 @@ type GleamPattern
         }
 
 
-{-| The sub-set of F# expression syntax used in generated code
+{-| The sub-set of gleam expression syntax used in generated code
 -}
 type GleamExpression
     = GleamExpressionFloat Float
@@ -5817,7 +5817,7 @@ printGleamExpressionSingleCase branch =
 
 
 {-| Print value/function declarations into
-an F# module called `Elm` in the global namespace that exposes all members.
+an gleam module called `Elm` in the global namespace that exposes all members.
 Will also add some internal wrapper declarations.
 -}
 gleamDeclarationsToModuleString :
