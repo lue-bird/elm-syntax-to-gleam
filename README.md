@@ -27,8 +27,8 @@ plus2 n =
 -->
 Ok """..some default declarations and imports..
 
-pub fn sample_plus2() -> fn(Float) -> Float {
-    fn(n) { float.add(n, float.sum([ 2.0 ])) }
+pub fn sample_plus2(n: Float) -> Float {
+    float.add(n, float.sum([ 2.0 ]))
 }
 """
 ```
